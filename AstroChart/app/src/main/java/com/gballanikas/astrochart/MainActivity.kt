@@ -258,15 +258,14 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
             drawCircle(wheelMuted, signRadius, center, style = Stroke(1.2f))
             drawCircle(wheelMuted, aspectRadius, center, style = Stroke(1.0f))
 
-            // Exact orientation of the uploaded reference:
-            // Aries centered at 9 o'clock, Taurus at about 8, Gemini at 7,
-            // Cancer at 6, Leo at 5, Virgo at 4, Libra at 3,
-            // Scorpio at 2, Sagittarius at 1, Capricorn at 12,
-            // Aquarius at 11, Pisces at 10.
+            // Zodiac dividers stay entirely inside the circular chart.
+            // They separate the zodiac sectors between the inner aspect circle
+            // and the inner edge of the zodiac ring, never extending into the
+            // gaps/areas outside the purple zodiac glyph boxes.
             for (i in 0 until 12) {
                 val a = Math.toRadians(180.0 - i * 30.0)
-                val outer = Offset(center.x + radius * cos(a).toFloat(), center.y + radius * sin(a).toFloat())
-                val inner = Offset(center.x + signRadius * cos(a).toFloat(), center.y + signRadius * sin(a).toFloat())
+                val outer = Offset(center.x + signRadius * cos(a).toFloat(), center.y + signRadius * sin(a).toFloat())
+                val inner = Offset(center.x + aspectRadius * cos(a).toFloat(), center.y + aspectRadius * sin(a).toFloat())
                 drawLine(wheelMuted, inner, outer, strokeWidth = 1f)
             }
 
