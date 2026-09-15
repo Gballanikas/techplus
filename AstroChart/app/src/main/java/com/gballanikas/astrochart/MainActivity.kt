@@ -312,7 +312,7 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
             drawCircle(wheelMuted, aspectRadius, center, style = Stroke(1.0f))
 
             for (i in 0 until 12) {
-                val a = Math.toRadians(i * 30.0 - 90.0)
+                val a = Math.toRadians(i * 30.0 + 180.0)
                 val inner = Offset(
                     center.x + signRadius * cos(a).toFloat(),
                     center.y + signRadius * sin(a).toFloat()
@@ -341,26 +341,26 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
 
             drawIntoCanvas { canvas ->
                 val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                     textAlign = Paint.Align.CENTER
                 }
 
-                paint.color = android.graphics.Color.rgb(145, 158, 177)
-                paint.textSize = 27f
+                paint.color = android.graphics.Color.rgb(184, 194, 209)
+                paint.textSize = 36f
                 zodiacGlyph.forEachIndexed { i, glyph ->
-                    val angle = Math.toRadians(i * 30.0 + 15.0 - 90.0)
+                    val angle = Math.toRadians(i * 30.0 + 15.0 + 180.0)
                     val p = Offset(
                         center.x + radius * .91f * cos(angle).toFloat(),
                         center.y + radius * .91f * sin(angle).toFloat()
                     )
-                    canvas.nativeCanvas.drawText(glyph, p.x, p.y + 9f, paint)
+                    canvas.nativeCanvas.drawText(glyph, p.x, p.y + 12f, paint)
                 }
 
                 paint.color = android.graphics.Color.rgb(255, 209, 102)
-                paint.textSize = 25f
+                paint.textSize = 34f
                 positions.forEach { p ->
                     val point = wheelPoint(center, planetRadius, p.longitude)
-                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + 8f, paint)
+                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + 11f, paint)
                 }
             }
         }
@@ -377,7 +377,7 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
 }
 
 private fun wheelPoint(center: Offset, radius: Float, longitude: Double): Offset {
-    val angle = Math.toRadians(longitude - 90.0)
+    val angle = Math.toRadians(longitude + 180.0)
     return Offset(
         center.x + radius * cos(angle).toFloat(),
         center.y + radius * sin(angle).toFloat()
@@ -398,35 +398,45 @@ private fun calculatePositions(instant: Instant): List<PointPosition> {
 
 private fun calculateAspects(points: List<PointPosition>): List<Aspect> {
     val result = mutableListOf<Aspect>()
-    for (i in 0 until points.size) for (j in i + 1 until points.size) {
-        val distance = angularDistance(points[i].longitude, points[j].longitude)
-        val rule = aspectRules.firstOrNull { abs(distance - it.angle) <= it.orb }
-        if (rule != null) {
-            result += Aspect(
-                points[i].name,
-                points[j].name,
-                rule.angle,
-                abs(distance - rule.angle),
-                rule.glyph
-            )
+    for (i in 0 until points.size) {
+        for (j in i + 1 until points.size) {
+            val distance = angularDistance(points[i].longitude, points[j].longitude)
+            val rule = aspectRules.minByOrNull { abs(distance - it.angle) }
+            if (rule != null) {
+                val orb = abs(distance - rule.angle)
+                if (orb <= rule.orb) {
+                    result += Aspect(
+                        points[i].name,
+                        points[j].name,
+                        rule.angle,
+                        orb,
+                        rule.glyph
+                    )
+                }
+            }
         }
     }
     return result
 }
 
 private fun angularDistance(a: Double, b: Double): Double {
-    val d = abs(normalize(a - b))
+    val d = abs(normalize(a) - normalize(b))
     return min(d, 360.0 - d)
 }
 
 private fun formatPosition(longitude: Double): String {
-    val sign = (longitude / 30.0).toInt().coerceIn(0, 11)
-    val inside = longitude - sign * 30.0
-    val degrees = inside.toInt()
-    val minuteFloat = (inside - degrees) * 60.0
-    val minutes = minuteFloat.toInt()
-    val seconds = ((minuteFloat - minutes) * 60.0).toInt()
-    return "${zodiacGlyph[sign]} ${zodiac[sign]} $degrees° $minutes' $seconds\""
+    val lon = normalize(longitude)
+    val signIndex = (lon / 30.0).toInt().coerceIn(0, 11)
+    val degrees = lon - signIndex * 30.0
+    val wholeDegrees = degrees.toInt()
+    val minutesFloat = (degrees - wholeDegrees) * 60.0
+    val minutes = minutesFloat.toInt()
+    val seconds = ((minutesFloat - minutes) * 60.0).toInt()
+    return "${zodiac[signIndex]} ${wholeDegrees}° ${minutes.toString().padStart(2, '0')}' ${seconds.toString().padStart(2, '0')}\""
 }
 
-private fun normalize(value: Double): Double = ((value % 360.0) + 360.0) % 360.0
+private fun normalize(value: Double): Double {
+    var x = value % 360.0
+    if (x < 0) x += 360.0
+    return x
+}
