@@ -37,8 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.cosinekitty.astronomy.Aberration
 import io.github.cosinekitty.astronomy.Body
+import io.github.cosinekitty.astronomy.Ecliptic
 import io.github.cosinekitty.astronomy.Time
-import io.github.cosinekitty.astronomy.ecliptic
+import io.github.cosinekitty.astronomy.eclipticGeoMoon
 import io.github.cosinekitty.astronomy.geoVector
 import io.github.cosinekitty.astronomy.sunPosition
 import java.time.Instant
@@ -173,8 +174,8 @@ private fun calculatePositions(instant: Instant): List<PointPosition> {
     return bodies.mapIndexed { i, pair ->
         val longitude = when (pair.first) {
             Body.Sun -> sunPosition(time).elon
-            Body.Moon -> io.github.cosinekitty.astronomy.eclipticGeoMoon(time).elon
-            else -> ecliptic(geoVector(pair.first, time, Aberration.Corrected)).elon
+            Body.Moon -> eclipticGeoMoon(time).elon
+            else -> Ecliptic(geoVector(pair.first, time, Aberration.Corrected)).elon
         }
         PointPosition(names[i], pair.second, normalize(longitude))
     }
