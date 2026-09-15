@@ -55,7 +55,7 @@ private fun calculatePositions(instant: Instant): List<PointPosition> {
     return bodies.map { (body, glyph) ->
         val longitude = when (body) {
             Body.Sun -> sunPosition(time).elon
-            Body.Moon -> eclipticGeoMoon(time).elon
+            Body.Moon -> eclipticGeoMoon(time).lon
             else -> equatorialToEcliptic(geoVector(body, time, Aberration.Corrected)).elon
         }
         PointPosition(body.name, glyph, normalize(longitude))
