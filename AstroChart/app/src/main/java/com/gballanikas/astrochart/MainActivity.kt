@@ -181,7 +181,10 @@ private fun BirthScreen() {
 
 @Composable
 private fun PositionList(positions: List<PointPosition>) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = wheelBackground, contentColor = Color.White)
+    ) {
         Column(Modifier.padding(10.dp)) {
             Text("Planetary positions", fontWeight = FontWeight.Bold)
             positions.forEach { p ->
@@ -277,18 +280,20 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                     textAlign = Paint.Align.CENTER
                 }
+                // Large, phone-friendly zodiac glyphs that remain inside each sign sector.
                 paint.color = android.graphics.Color.rgb(221, 230, 242)
-                paint.textSize = with(density) { 50.sp.toPx() }
+                paint.textSize = with(density) { 58.sp.toPx() }
                 zodiacGlyph.forEachIndexed { i, glyph ->
                     val angle = Math.toRadians(180.0 - (i * 30.0 + 15.0))
-                    val p = Offset(center.x + radius * .91f * cos(angle).toFloat(), center.y + radius * .91f * sin(angle).toFloat())
-                    canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 12.dp.toPx() }, paint)
+                    val p = Offset(center.x + radius * .89f * cos(angle).toFloat(), center.y + radius * .89f * sin(angle).toFloat())
+                    canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 14.dp.toPx() }, paint)
                 }
+                // Larger gold planet glyphs, still clearly separated from the zodiac ring.
                 paint.color = android.graphics.Color.rgb(255, 209, 102)
-                paint.textSize = with(density) { 44.sp.toPx() }
+                paint.textSize = with(density) { 50.sp.toPx() }
                 positions.forEach { p ->
                     val point = wheelPoint(center, planetRadius, p.longitude)
-                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 11.dp.toPx() }, paint)
+                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 12.dp.toPx() }, paint)
                 }
             }
         }
