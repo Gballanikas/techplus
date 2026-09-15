@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -30,7 +29,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,11 +38,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,43 +69,31 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class PointPosition(
-    val name: String,
-    val glyph: String,
-    val longitude: Double
-)
-
-private data class Aspect(
-    val first: String,
-    val second: String,
-    val angle: Int,
-    val orb: Double,
-    val glyph: String
-)
+private data class PointPosition(val name: String, val glyph: String, val longitude: Double)
+private data class Aspect(val first: String, val second: String, val angle: Int, val orb: Double, val glyph: String)
+private data class AspectRule(val angle: Int, val orb: Double, val glyph: String)
 
 private val bodies = listOf(
     Body.Sun to "☉", Body.Moon to "☽", Body.Mercury to "☿", Body.Venus to "♀",
     Body.Mars to "♂", Body.Jupiter to "♃", Body.Saturn to "♄", Body.Uranus to "♅",
     Body.Neptune to "♆", Body.Pluto to "♇"
 )
-
 private val zodiac = listOf("Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces")
 private val zodiacGlyph = listOf("♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓")
+private val aspectRules = listOf(
+    AspectRule(0, 8.0, "☌"), AspectRule(60, 5.0, "⚹"), AspectRule(90, 6.0, "□"),
+    AspectRule(120, 7.0, "△"), AspectRule(180, 8.0, "☍")
+)
 
 @Composable
 private fun AstroChartApp() {
     var tab by remember { mutableIntStateOf(0) }
     MaterialTheme {
         Column(Modifier.fillMaxSize().background(Color(0xFFFAF7FB))) {
-            Text(
-                "AstroChart",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Text("AstroChart", Modifier.padding(16.dp), fontSize = 26.sp, fontWeight = FontWeight.Bold)
             ScrollableTabRow(selectedTabIndex = tab) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Real-time") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Birth horoscope") })
+                Tab(tab == 0, { tab = 0 }, text = { Text("Real-time") })
+                Tab(tab == 1, { tab = 1 }, text = { Text("Birth horoscope") })
             }
             if (tab == 0) RealTimeScreen() else BirthScreen()
         }
@@ -123,15 +108,14 @@ private fun RealTimeScreen() {
         Text("Current planetary positions", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Spacer(Modifier.height(8.dp))
         AspectMatrix(positions, aspects)
-        Spacer(Modifier.height(14.dp))
-        PositionList(positions)
         Spacer(Modifier.height(12.dp))
-        Text("Main aspects: conjunction 0°, sextile 60°, square 90°, trine 120°, opposition 180°", fontSize = 12.sp)
+        PositionList(positions)
     }
 }
 
 @Composable
 private fun BirthScreen() {
+    val context = LocalContext.current
     var name by remember { mutableStateOf("") }
     var date by remember { mutableStateOf(LocalDate.now()) }
     var time by remember { mutableStateOf(LocalTime.NOON) }
@@ -143,17 +127,16 @@ private fun BirthScreen() {
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
-                DatePickerDialog(this@BirthScreenActivityContext(), { _, y, m, d -> date = LocalDate.of(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth).show()
-            }) { Text("Date: ${date}") }
+                DatePickerDialog(context, { _, y, m, d -> date = LocalDate.of(y, m + 1, d) }, date.year, date.monthValue - 1, date.dayOfMonth).show()
+            }) { Text("Date: $date") }
             Button(onClick = {
-                TimePickerDialog(this@BirthScreenActivityContext(), { _, h, m -> time = LocalTime.of(h, m) }, time.hour, time.minute, true).show()
-            }) { Text("Time: ${time}") }
+                TimePickerDialog(context, { _, h, m -> time = LocalTime.of(h, m) }, time.hour, time.minute, true).show()
+            }) { Text("Time: ${time.toString().take(5)}") }
         }
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(city, { city = it }, label = { Text("City / location") }, modifier = Modifier.fillMaxWidth())
-        Text("Enter a worldwide city or location. Location/time-zone lookup will be added to the birth-chart service layer.", fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(8.dp))
-        Button(onClick = { generated = true }, modifier = Modifier.fillMaxWidth()) { Text("Calculate horoscope") }
+        Button(onClick = { generated = true }, Modifier.fillMaxWidth()) { Text("Calculate horoscope") }
         if (generated) {
             val instant = LocalDateTime.of(date, time).toInstant(ZoneOffset.UTC)
             val positions = calculatePositions(instant)
@@ -164,13 +147,10 @@ private fun BirthScreen() {
             AspectMatrix(positions, aspects)
             Spacer(Modifier.height(12.dp))
             PositionList(positions)
-            Text("Birth chart currently uses the entered UTC-equivalent time; city coordinates, DST/time-zone resolution, houses, Ascendant/MC, Chiron, Vertex and Part of Fortune are the next calculation layer.", fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
+            Text("Birth calculation currently treats the entered time as UTC. The next layer will resolve the selected city's coordinates, time zone/DST, Placidus houses, Ascendant/MC, Chiron, Vertex and Part of Fortune.", fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
         }
     }
 }
-
-// A small helper keeps the date/time dialogs tied to the hosting activity without storing an Activity in Compose state.
-private fun BirthScreenActivityContext(): android.content.Context = throw IllegalStateException("Date/time picker context is supplied by the activity host")
 
 @Composable
 private fun PositionList(positions: List<PointPosition>) {
@@ -179,8 +159,8 @@ private fun PositionList(positions: List<PointPosition>) {
             Text("Planetary positions", fontWeight = FontWeight.Bold)
             positions.forEach { p ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(p.glyph, fontSize = 22.sp, modifier = Modifier.width(34.dp))
-                    Text(p.name, modifier = Modifier.width(80.dp), fontWeight = FontWeight.Medium)
+                    Text(p.glyph, fontSize = 22.sp, Modifier.width(34.dp))
+                    Text(p.name, Modifier.width(82.dp), fontWeight = FontWeight.Medium)
                     Text(formatPosition(p.longitude))
                 }
             }
@@ -196,10 +176,7 @@ private fun AspectMatrix(positions: List<PointPosition>, aspects: List<Aspect>) 
             Spacer(Modifier.height(6.dp))
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 Column {
-                    Row {
-                        Text("", Modifier.width(78.dp))
-                        positions.forEach { Text(it.glyph, Modifier.width(32.dp), fontWeight = FontWeight.Bold) }
-                    }
+                    Row { Text("", Modifier.width(78.dp)); positions.forEach { Text(it.glyph, Modifier.width(32.dp)) } }
                     positions.forEachIndexed { i, p ->
                         Row {
                             Text(p.glyph + " " + p.name.take(3), Modifier.width(78.dp))
@@ -223,29 +200,24 @@ private fun AspectMatrix(positions: List<PointPosition>, aspects: List<Aspect>) 
 private fun HoroscopeWheel(positions: List<PointPosition>) {
     Box(Modifier.fillMaxWidth().height(330.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(310.dp)) {
-            val c = Offset(size.width / 2f, size.height / 2f)
-            val r = min(size.width, size.height) * .46f
-            drawCircle(Color.White, r, c)
-            drawCircle(Color(0xFF5D3B66), r, c, style = Stroke(3f))
-            drawCircle(Color(0xFFB8A9BD), r * .78f, c, style = Stroke(1.5f))
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val radius = min(size.width, size.height) * .46f
+            drawCircle(Color.White, radius, center)
+            drawCircle(Color(0xFF5D3B66), radius, center, style = Stroke(3f))
+            drawCircle(Color(0xFFB8A9BD), radius * .78f, center, style = Stroke(1.5f))
             for (i in 0..11) {
-                val a = Math.toRadians((i * 30.0 - 90.0))
-                val p = Offset(c.x + r * cos(a).toFloat(), c.y + r * sin(a).toFloat())
-                drawLine(Color(0xFF8E7A91), c, p, strokeWidth = 1f)
-                val ta = Math.toRadians((i * 30.0 + 15.0 - 90.0))
-                val tx = c.x + r * .88f * cos(ta).toFloat()
-                val ty = c.y + r * .88f * sin(ta).toFloat()
-                drawCircle(Color(0xFFEFE7F0), 16f, Offset(tx, ty))
+                val angle = Math.toRadians(i * 30.0 - 90.0)
+                val p = Offset(center.x + radius * cos(angle).toFloat(), center.y + radius * sin(angle).toFloat())
+                drawLine(Color(0xFF8E7A91), center, p, strokeWidth = 1f, cap = StrokeCap.Butt)
             }
-            val inner = r * .78f
-            positions.forEachIndexed { index, p ->
-                val a = Math.toRadians(p.longitude - 90.0)
-                val pos = Offset(c.x + inner * cos(a).toFloat(), c.y + inner * sin(a).toFloat())
-                drawCircle(Color(0xFF5D3B66), 8f, pos)
+            positions.forEach { p ->
+                val angle = Math.toRadians(p.longitude - 90.0)
+                val pos = Offset(center.x + radius * .72f * cos(angle).toFloat(), center.y + radius * .72f * sin(angle).toFloat())
+                drawCircle(Color(0xFF5D3B66), 7f, pos)
             }
         }
     }
-    Text("Classic zodiac wheel preview", fontSize = 12.sp)
+    Text("Classic zodiac wheel", fontSize = 12.sp)
 }
 
 private fun calculatePositions(instant: Instant): List<PointPosition> {
@@ -263,10 +235,9 @@ private fun calculatePositions(instant: Instant): List<PointPosition> {
 private fun calculateAspects(points: List<PointPosition>): List<Aspect> {
     val result = mutableListOf<Aspect>()
     for (i in 0 until points.size) for (j in i + 1 until points.size) {
-        val d = angularDistance(points[i].longitude, points[j].longitude)
-        val candidates = listOf(0 to 8.0 to "☌", 60 to 5.0 to "⚹", 90 to 6.0 to "□", 120 to 7.0 to "△", 180 to 8.0 to "☍")
-        val hit = candidates.firstOrNull { abs(d - it.first.first) <= it.first.second }
-        if (hit != null) result += Aspect(points[i].name, points[j].name, hit.first.first, abs(d - hit.first.first), hit.second)
+        val distance = angularDistance(points[i].longitude, points[j].longitude)
+        val rule = aspectRules.firstOrNull { abs(distance - it.angle) <= it.orb }
+        if (rule != null) result += Aspect(points[i].name, points[j].name, rule.angle, abs(distance - rule.angle), rule.glyph)
     }
     return result
 }
@@ -279,11 +250,11 @@ private fun angularDistance(a: Double, b: Double): Double {
 private fun formatPosition(longitude: Double): String {
     val sign = (longitude / 30.0).toInt().coerceIn(0, 11)
     val inside = longitude - sign * 30.0
-    val deg = inside.toInt()
-    val minFloat = (inside - deg) * 60.0
-    val min = minFloat.toInt()
-    val sec = ((minFloat - min) * 60.0).toInt()
-    return "${zodiacGlyph[sign]} ${zodiac[sign]} ${deg}° ${min}' ${sec}\""
+    val degrees = inside.toInt()
+    val minuteFloat = (inside - degrees) * 60.0
+    val minutes = minuteFloat.toInt()
+    val seconds = ((minuteFloat - minutes) * 60.0).toInt()
+    return "${zodiacGlyph[sign]} ${zodiac[sign]} $degrees° $minutes' $seconds\""
 }
 
 private fun normalize(value: Double): Double = ((value % 360.0) + 360.0) % 360.0
