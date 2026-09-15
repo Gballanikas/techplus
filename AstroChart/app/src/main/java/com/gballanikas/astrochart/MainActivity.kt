@@ -263,10 +263,14 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
             // Cancer at 6, Leo at 5, Virgo at 4, Libra at 3,
             // Scorpio at 2, Sagittarius at 1, Capricorn at 12,
             // Aquarius at 11, Pisces at 10.
+            // Zodiac divider lines are clipped to the circular chart area:
+            // they run from the inner aspect circle to the outer zodiac circle,
+            // never beyond the circular boundary.
             for (i in 0 until 12) {
                 val a = Math.toRadians(180.0 - i * 30.0)
-                val inner = Offset(center.x + signRadius * cos(a).toFloat(), center.y + signRadius * sin(a).toFloat())
-                drawLine(wheelMuted, center, inner, strokeWidth = 1f)
+                val inner = Offset(center.x + aspectRadius * cos(a).toFloat(), center.y + aspectRadius * sin(a).toFloat())
+                val outer = Offset(center.x + radius * cos(a).toFloat(), center.y + radius * sin(a).toFloat())
+                drawLine(wheelMuted, inner, outer, strokeWidth = 1f)
             }
 
             aspects.forEach { aspect ->
@@ -288,12 +292,12 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
                     val p = Offset(center.x + radius * .89f * cos(angle).toFloat(), center.y + radius * .89f * sin(angle).toFloat())
                     canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 14.dp.toPx() }, paint)
                 }
-                // Larger gold planet glyphs, still clearly separated from the zodiac ring.
+                // Planet glyphs reduced by 50% from the previous version.
                 paint.color = android.graphics.Color.rgb(255, 209, 102)
-                paint.textSize = with(density) { 50.sp.toPx() }
+                paint.textSize = with(density) { 25.sp.toPx() }
                 positions.forEach { p ->
                     val point = wheelPoint(center, planetRadius, p.longitude)
-                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 12.dp.toPx() }, paint)
+                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 6.dp.toPx() }, paint)
                 }
             }
         }
