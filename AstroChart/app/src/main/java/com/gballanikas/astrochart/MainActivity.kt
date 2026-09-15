@@ -159,7 +159,7 @@ private fun PositionList(positions: List<PointPosition>) {
             Text("Planetary positions", fontWeight = FontWeight.Bold)
             positions.forEach { p ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(p.glyph, fontSize = 22.sp, Modifier.width(34.dp))
+                    Text(p.glyph, fontSize = 22.sp, modifier = Modifier.width(34.dp))
                     Text(p.name, Modifier.width(82.dp), fontWeight = FontWeight.Medium)
                     Text(formatPosition(p.longitude))
                 }
