@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -226,7 +228,13 @@ private fun PositionList(positions: List<PointPosition>) {
 
 @Composable
 private fun AspectMatrix(positions: List<PointPosition>, aspects: List<Aspect>) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = wheelBackground,
+            contentColor = Color.White
+        )
+    ) {
         Column(Modifier.padding(10.dp)) {
             Text("Aspects", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(Modifier.height(6.dp))
@@ -298,6 +306,8 @@ private fun AspectLegendItem(glyph: String, label: String, color: Color) {
 
 @Composable
 private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>) {
+    val density = LocalDensity.current
+
     Box(Modifier.fillMaxWidth().height(350.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(330.dp)) {
             val center = Offset(size.width / 2f, size.height / 2f)
@@ -311,6 +321,8 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
             drawCircle(wheelMuted, signRadius, center, style = Stroke(1.2f))
             drawCircle(wheelMuted, aspectRadius, center, style = Stroke(1.0f))
 
+            // Keep the exact approved zodiac orientation:
+            // Aries 0° starts at 270° / 9 o'clock, then Taurus, Gemini, etc. clockwise.
             for (i in 0 until 12) {
                 val a = Math.toRadians(i * 30.0 + 180.0)
                 val inner = Offset(
@@ -345,22 +357,32 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
                     textAlign = Paint.Align.CENTER
                 }
 
-                paint.color = android.graphics.Color.rgb(184, 194, 209)
-                paint.textSize = 36f
+                paint.color = android.graphics.Color.rgb(221, 230, 242)
+                paint.textSize = with(density) { 50.sp.toPx() }
                 zodiacGlyph.forEachIndexed { i, glyph ->
                     val angle = Math.toRadians(i * 30.0 + 15.0 + 180.0)
                     val p = Offset(
                         center.x + radius * .91f * cos(angle).toFloat(),
                         center.y + radius * .91f * sin(angle).toFloat()
                     )
-                    canvas.nativeCanvas.drawText(glyph, p.x, p.y + 12f, paint)
+                    canvas.nativeCanvas.drawText(
+                        glyph,
+                        p.x,
+                        p.y + with(density) { 12.dp.toPx() },
+                        paint
+                    )
                 }
 
                 paint.color = android.graphics.Color.rgb(255, 209, 102)
-                paint.textSize = 34f
+                paint.textSize = with(density) { 44.sp.toPx() }
                 positions.forEach { p ->
                     val point = wheelPoint(center, planetRadius, p.longitude)
-                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + 11f, paint)
+                    canvas.nativeCanvas.drawText(
+                        p.glyph,
+                        point.x,
+                        point.y + with(density) { 11.dp.toPx() },
+                        paint
+                    )
                 }
             }
         }
