@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Deep space background -->
+    <path android:fillColor="#071525" android:pathData="M0,0h108v108h-108z" />
+
+    <!-- Gold celestial ring -->
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="#F2C35B"
+        android:strokeWidth="3"
+        android:pathData="M54,8 A46,46 0,1 0,54,100 A46,46 0,1 0,54,8" />
+
+    <!-- Compass / eight-point star -->
+    <path android:fillColor="#F2C35B"
+        android:pathData="M54,16 L59,45 L92,54 L59,59 L54,92 L49,59 L16,54 L49,49 Z" />
+    <path android:fillColor="#FFF1B8"
+        android:pathData="M54,27 L57,49 L78,54 L57,57 L54,81 L51,57 L30,54 L51,51 Z" />
+
+    <!-- Crescent moon -->
+    <path android:fillColor="#F2C35B"
+        android:pathData="M73,17 A31,31 0,0 0,76,76 A29,29 0,0 1,73,17 Z" />
+
+    <!-- Stars -->
+    <path android:fillColor="#F8D98A" android:pathData="M88,23 l2,5 5,2 -5,2 -2,5 -2,-5 -5,-2 5,-2z" />
+    <path android:fillColor="#F8D98A" android:pathData="M24,77 l1.5,4 4,1.5 -4,1.5 -1.5,4 -1.5,-4 -4,-1.5 4,-1.5z" />
+    <path android:fillColor="#F8D98A" android:pathData="M83,84 l1,3 3,1 -3,1 -1,3 -1,-3 -3,-1 3,-1z" />
+</vector>
