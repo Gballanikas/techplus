@@ -6,7 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
@@ -39,10 +37,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.cosinekitty.astronomy.Aberration
 import io.github.cosinekitty.astronomy.Body
-import io.github.cosinekitty.astronomy.EquatorEpoch
-import io.github.cosinekitty.astronomy.Observer
 import io.github.cosinekitty.astronomy.Time
-import io.github.cosinekitty.astronomy.eclipticLongitude
+import io.github.cosinekitty.astronomy.ecliptic
+import io.github.cosinekitty.astronomy.geoVector
+import io.github.cosinekitty.astronomy.sunPosition
 import java.time.Instant
 
 class MainActivity : ComponentActivity() {
@@ -78,8 +76,7 @@ private fun AstroChartApp() {
                 Tab(tab == 0, onClick = { tab = 0 }, text = { Text("Real Time") })
                 Tab(tab == 1, onClick = { tab = 1 }, text = { Text("Birth Horoscope") })
             }
-            if (tab == 0) RealTimePage(positions)
-            else BirthPage(city, { city = it }, positions)
+            if (tab == 0) RealTimePage(positions) else BirthPage(city, { city = it }, positions)
         }
     }
 }
@@ -116,7 +113,7 @@ private fun AspectMatrix(positions: List<PointPosition>) {
     Text("ANGLES / ASPECTS", fontWeight = FontWeight.Bold)
     Row(Modifier.horizontalScroll(rememberScrollState())) {
         Column {
-            Row { Box(Modifier.size(54.dp)) }
+            Box(Modifier.size(54.dp))
             positions.forEach { Text(it.glyph, Modifier.size(54.dp).padding(12.dp), fontSize = 18.sp) }
         }
         positions.forEach { col ->
@@ -136,8 +133,7 @@ private fun PositionList(positions: List<PointPosition>) {
     positions.forEach {
         val d = normalize(it.longitude)
         val sign = signs[(d / 30).toInt()]
-        val within = d % 30.0
-        Text("${it.glyph}  ${it.name.padEnd(9)}  ${formatDms(within)}  $sign", fontSize = 14.sp, modifier = Modifier.padding(vertical = 2.dp))
+        Text("${it.glyph}  ${it.name.padEnd(9)}  ${formatDms(d % 30.0)}  $sign", fontSize = 14.sp, modifier = Modifier.padding(vertical = 2.dp))
     }
 }
 
@@ -174,14 +170,11 @@ private fun HoroscopeWheel(positions: List<PointPosition>) {
 
 private fun calculatePositions(instant: Instant): List<PointPosition> {
     val time = Time.fromMillisecondsSince1970(instant.toEpochMilli())
-    val observer = Observer(0.0, 0.0, 0.0)
     return bodies.mapIndexed { i, pair ->
-        val longitude = if (pair.first == Body.Sun) {
-            io.github.cosinekitty.astronomy.sunPosition(time).elon
-        } else if (pair.first == Body.Moon) {
-            io.github.cosinekitty.astronomy.eclipticGeoMoon(time).elon
-        } else {
-            io.github.cosinekitty.astronomy.eclipticLongitude(pair.first, time)
+        val longitude = when (pair.first) {
+            Body.Sun -> sunPosition(time).elon
+            Body.Moon -> io.github.cosinekitty.astronomy.eclipticGeoMoon(time).elon
+            else -> ecliptic(geoVector(pair.first, time, Aberration.Corrected)).elon
         }
         PointPosition(names[i], pair.second, normalize(longitude))
     }
