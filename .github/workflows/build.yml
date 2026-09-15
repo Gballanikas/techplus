@@ -26,7 +26,7 @@ jobs:
 
       - name: Extract TechPulse project
         run: |
-          unzip -q TechPulse_v2_Android_Project.zip
+          unzip -q TechPulse_v3_Android_Project.zip
           cp -R TechPulse/. .
           rm -rf TechPulse
 
