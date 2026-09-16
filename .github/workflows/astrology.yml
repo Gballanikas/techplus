@@ -20,7 +20,7 @@ jobs:
         run: |
           mkdir -p app/src/main/java/io/github/cosinekitty/astronomy
           curl --fail --location --retry 3 "https://raw.githubusercontent.com/cosinekitty/astronomy/v2.1.19/source/kotlin/src/main/kotlin/io/github/cosinekitty/astronomy/astronomy.kt" --output app/src/main/java/io/github/cosinekitty/astronomy/astronomy.kt
-      - name: Apply simple zodiac glyph rendering
+      - name: Apply wheel rendering changes
         working-directory: AstroChart
         run: |
           python3 - <<'PY'
@@ -33,11 +33,23 @@ jobs:
           )
           s = s.replace(
               'paint.color = android.graphics.Color.rgb(221, 230, 242)\n                paint.textSize = with(density) { 58.sp.toPx() }',
-              'paint.color = android.graphics.Color.rgb(255, 209, 102)\n                paint.textSize = with(density) { 25.sp.toPx() }'
+              'paint.color = android.graphics.Color.rgb(255, 59, 59)\n                paint.textSize = with(density) { 25.sp.toPx() }'
           )
           s = s.replace(
               'canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 14.dp.toPx() }, paint)',
               'canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 6.dp.toPx() }, paint)'
+          )
+          s = s.replace(
+              'val aspectRadius = radius * .56f\n            val planetRadius = radius * .66f',
+              'val aspectRadius = radius * .64f\n            val planetRadius = radius * .72f'
+          )
+          s = s.replace(
+              'paint.textSize = with(density) { 25.sp.toPx() }\n                positions.forEach { p ->',
+              'paint.textSize = with(density) { 12.5.sp.toPx() }\n                positions.forEach { p ->'
+          )
+          s = s.replace(
+              'canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 6.dp.toPx() }, paint)\n                }',
+              'canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 3.dp.toPx() }, paint)\n                }\n                paint.color = android.graphics.Color.rgb(184, 194, 209)\n                paint.textSize = with(density) { 10.sp.toPx() }\n                for (i in 0 until 12) {\n                    val degree = i * 30\n                    val angle = Math.toRadians(180.0 - degree)\n                    val p = Offset(center.x + radius * 1.025f * cos(angle).toFloat(), center.y + radius * 1.025f * sin(angle).toFloat())\n                    canvas.nativeCanvas.drawText("$degree°", p.x, p.y + with(density) { 4.dp.toPx() }, paint)\n                }'
           )
           p.write_text(s)
           PY
