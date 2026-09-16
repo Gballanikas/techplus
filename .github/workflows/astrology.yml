@@ -31,6 +31,9 @@ jobs:
           from pathlib import Path
           p = Path('app/src/main/java/com/gballanikas/astrochart/MainActivity.kt')
           s = p.read_text()
+          if 'import androidx.compose.ui.graphics.nativeCanvas' not in s:
+              marker = 'import androidx.compose.ui.graphics.drawscope.drawIntoCanvas\n'
+              s = s.replace(marker, marker + 'import androidx.compose.ui.graphics.nativeCanvas\n', 1)
           replacements = [
               ('''private val zodiacGlyph = listOf("♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓")''', '''private val zodiacGlyph = listOf("♈︎", "♉︎", "♊︎", "♋︎", "♌︎", "♍︎", "♎︎", "♏︎", "♐︎", "♑︎", "♒︎", "♓︎")'''),
               ('''paint.color = android.graphics.Color.rgb(221, 230, 242)\n                paint.textSize = with(density) { 58.sp.toPx() }''', '''paint.color = android.graphics.Color.rgb(255, 59, 59)\n                paint.textSize = with(density) { 25.sp.toPx() }'''),
