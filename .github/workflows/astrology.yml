@@ -29,21 +29,114 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path('app/src/main/java/com/gballanikas/astrochart/MainActivity.kt')
           s = p.read_text()
           marker = 'import androidx.compose.ui.graphics.drawscope.drawIntoCanvas\n'
           if 'import androidx.compose.ui.graphics.nativeCanvas' not in s:
               s = s.replace(marker, marker + 'import androidx.compose.ui.graphics.nativeCanvas\n', 1)
-          s = s.replace(
-              'val asc = normalize(Math.toDegrees(atan2(-cos(ramc), sin(ramc) * cos(eps) + tanPhi * sin(eps))))',
-              'val asc = normalize(Math.toDegrees(atan2(-cos(ramc), sin(ramc) * cos(eps) + tanPhi * sin(eps)) + Math.PI))'
-          )
-          s = s.replace('placidusIntermediate(ramcDeg, tanPhi, tanEps, initialOffset = 30.0, divisor = 3.0, upper = true)', 'placidusIntermediate(ramcDeg, tanPhi, tanEps, eps, initialOffset = 30.0, divisor = 3.0, upper = true)')
-          s = s.replace('placidusIntermediate(ramcDeg, tanPhi, tanEps, initialOffset = 60.0, divisor = 1.5, upper = true)', 'placidusIntermediate(ramcDeg, tanPhi, tanEps, eps, initialOffset = 60.0, divisor = 1.5, upper = true)')
-          s = s.replace('placidusIntermediate(ramcDeg, tanPhi, tanEps, initialOffset = 120.0, divisor = 1.5, upper = false)', 'placidusIntermediate(ramcDeg, tanPhi, tanEps, eps, initialOffset = 120.0, divisor = 1.5, upper = false)')
-          s = s.replace('placidusIntermediate(ramcDeg, tanPhi, tanEps, initialOffset = 150.0, divisor = 3.0, upper = false)', 'placidusIntermediate(ramcDeg, tanPhi, tanEps, eps, initialOffset = 150.0, divisor = 3.0, upper = false)')
-          s = s.replace('private fun placidusIntermediate(ramcDeg: Double, tanPhi: Double, tanEps: Double, initialOffset:', 'private fun placidusIntermediate(ramcDeg: Double, tanPhi: Double, tanEps: Double, eps: Double, initialOffset:')
-          s = s.replace('return normalize(Math.toDegrees(atan2(sin(ra), cos(ra) * cos(Math.toRadians(23.4392911)))))', 'return normalize(Math.toDegrees(atan2(sin(ra), cos(ra) * cos(eps))))')
+
+          # Replace only the house-calculation block. This is the classic
+          # Placidus semi-arc iteration: H11/H12 are 1/3 and 2/3 of the
+          # diurnal semi-arc; H2/H3 are 2/3 and 1/3 of the nocturnal
+          # semi-arc. The four opposite cusps are 180 degrees away.
+          start = s.index('private fun calculatePlacidusHouses(')
+          end = s.index('private fun searchLocationsAsync(', start)
+          corrected = r'''private fun calculatePlacidusHouses(latitude: Double, longitude: Double, time: Time): ChartAngles {
+    require(abs(latitude) < 90.0) { "Invalid latitude" }
+
+    val phi = Math.toRadians(latitude)
+    val eps = eclipticObliquity(time)
+    val tanPhi = tan(phi)
+    val tanEps = tan(eps)
+
+    // ARMC = local sidereal time in degrees + geographic longitude.
+    // This is the right ascension of the local meridian.
+    val ramcDeg = normalize(siderealTime(time) * 15.0 + longitude)
+    val ramc = Math.toRadians(ramcDeg)
+
+    // Fixed angular cusps.
+    val mc = normalize(Math.toDegrees(atan2(sin(ramc), cos(ramc) * cos(eps))))
+    // The expression below gives the standard eastern-horizon Ascendant;
+    // +180 is required because atan2 returns the opposite branch here.
+    val asc = normalize(Math.toDegrees(atan2(-cos(ramc), sin(ramc) * cos(eps) + tanPhi * sin(eps))) + 180.0)
+
+    val h = DoubleArray(12)
+    h[0] = asc                 // 1st: ASC
+    h[3] = normalize(mc + 180) // 4th: IC
+    h[6] = normalize(asc + 180)// 7th: DSC
+    h[9] = mc                  // 10th: MC
+
+    // Placidus is mathematically undefined in the polar region. Do not
+    // silently turn it into Equal/Whole Sign houses. The normal birth
+    // locations supported by AstroChart are below this limit.
+    if (abs(latitude) >= 66.5633) {
+        for (i in 1 until 12) h[i] = Double.NaN
+        return ChartAngles(h.toList(), asc, mc)
+    }
+
+    // Swiss-Ephemeris-style iterative semi-arc solution. The initial RA
+    // offsets (30/60/120/150 degrees) provide the conventional starting
+    // guesses; the iteration itself uses the latitude-dependent AD.
+    h[10] = placidusCusp(ramc, phi, eps, 30.0, 3.0, false) // 11th
+    h[11] = placidusCusp(ramc, phi, eps, 60.0, 1.5, false) // 12th
+    h[1]  = placidusCusp(ramc, phi, eps, 120.0, 1.5, true) // 2nd
+    h[2]  = placidusCusp(ramc, phi, eps, 150.0, 3.0, true) // 3rd
+
+    // Opposite cusps are exactly 180 degrees away.
+    h[4] = normalize(h[10] + 180.0) // 5th
+    h[5] = normalize(h[11] + 180.0) // 6th
+    h[7] = normalize(h[1] + 180.0)  // 8th
+    h[8] = normalize(h[2] + 180.0)  // 9th
+
+    return ChartAngles(h.toList(), asc, mc)
+}
+
+private fun placidusCusp(
+    ramc: Double,
+    phi: Double,
+    eps: Double,
+    initialOffsetDeg: Double,
+    divisor: Double,
+    negativeBranch: Boolean
+): Double {
+    var ra = ramc + Math.toRadians(initialOffsetDeg)
+    val tanPhi = tan(phi)
+    val tanEps = tan(eps)
+
+    repeat(20) {
+        // Declination of the ecliptic point represented by this RA:
+        // tan(delta) = sin(RA) * tan(eps).
+        val tanDelta = sin(ra) * tanEps
+        val delta = atan2(tanDelta, 1.0)
+        val adArg = (tanPhi * tan(delta)).coerceIn(-1.0, 1.0)
+        val ad = asin(adArg)
+
+        val next = if (!negativeBranch) {
+            // Upper hemisphere: RAMC + SA/3 or 2*SA/3.
+            ramc + (Math.PI / 2.0 + ad) / divisor
+        } else {
+            // Lower hemisphere: RAMC + 180 - SN*ratio.
+            ramc + Math.PI - (Math.PI / 2.0 - ad) / divisor
+        }
+
+        val difference = abs(Math.atan2(sin(next - ra), cos(next - ra)))
+        ra = next
+        if (difference < 1e-10) return@repeat
+    }
+
+    // Convert the final right ascension back to ecliptic longitude.
+    return normalize(Math.toDegrees(atan2(sin(ra), cos(ra) * cos(eps))))
+}
+
+private fun eclipticObliquity(time: Time): Double {
+    val t = time.tt / 36525.0
+    val asec = ((((-0.0000000434 * t - 0.000000576) * t + 0.00200340) * t - 0.0001831) * t - 46.836769) * t + 84381.406
+    return Math.toRadians((asec / 3600.0) + time.nutationEps() / 3600.0)
+}
+
+'''
+          s = s[:start] + corrected + s[end:]
           p.write_text(s)
           PY
       - name: Build APK
