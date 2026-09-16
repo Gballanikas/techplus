@@ -1,5 +1,5 @@
 name: Build AstroChart APK
-# Trigger AstroChart build
+# Trigger AstroChart build - fixed workflow source checkout
 on:
   push:
     branches: [main]
@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
