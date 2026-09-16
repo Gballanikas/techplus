@@ -44,51 +44,24 @@ jobs:
               'val aspectRadius = radius * .64f\n            val planetRadius = radius * .72f'
           )
           s = s.replace(
-              'paint.textSize = with(density) { 25.sp.toPx() }\n                positions.forEach { p ->',
-              'paint.textSize = with(density) { 12.5.sp.toPx() }\n                positions.forEach { p ->'
-          )
-          s = s.replace(
-              'canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 6.dp.toPx() }, paint)\n                }',
-              '''canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 3.dp.toPx() }, paint)
-                    val totalSeconds = (p.longitude * 240.0).toInt()
-                    val degrees = totalSeconds / 240
-                    val minutes = (totalSeconds % 240) / 4
-                    val seconds = totalSeconds % 4 * 15
-                    paint.color = android.graphics.Color.rgb(184, 194, 209)
-                    paint.textSize = with(density) { 7.5.sp.toPx() }
-                    paint.textAlign = Paint.Align.LEFT
-                    canvas.nativeCanvas.drawText(
-                        String.format(java.util.Locale.US, "%02d°%02d'%02d\\\"", degrees, minutes, seconds),
-                        point.x + with(density) { 7.dp.toPx() },
-                        point.y + with(density) { 2.dp.toPx() },
-                        paint
-                    )
-                    paint.textAlign = Paint.Align.CENTER
-                    paint.color = android.graphics.Color.rgb(255, 209, 102)
-                }'''
-          )
-          s = s.replace(
               'paint.color = android.graphics.Color.rgb(255, 209, 102)\n                paint.textSize = with(density) { 25.sp.toPx() }',
               'paint.color = android.graphics.Color.rgb(255, 209, 102)\n                paint.textSize = with(density) { 12.5.sp.toPx() }'
           )
           s = s.replace(
-              'canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 6.dp.toPx() }, paint)',
-              'canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 3.dp.toPx() }, paint)'
+              'canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 6.dp.toPx() }, paint)\n                }',
+              'canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 3.dp.toPx() }, paint)\n                }'
           )
           s = s.replace(
-              'paint.textSize = with(density) { 12.5.sp.toPx() }\n                positions.forEach { p ->',
-              'paint.textSize = with(density) { 12.5.sp.toPx() }\n                positions.forEach { p ->'
+              'paint.textSize = with(density) { 12.5.sp.toPx() }\n                positions.forEach { p ->\n                    val point = wheelPoint(center, planetRadius, p.longitude)\n                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 3.dp.toPx() }, paint)\n                }',
+              'paint.textSize = with(density) { 12.5.sp.toPx() }\n                positions.forEach { p ->\n                    val point = wheelPoint(center, planetRadius, p.longitude)\n                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 3.dp.toPx() }, paint)\n                    val totalSeconds = kotlin.math.round(p.longitude * 240.0).toInt()\n                    val degrees = (totalSeconds / 240) % 360\n                    val minutes = (totalSeconds % 240) / 4\n                    val seconds = (totalSeconds % 4) * 15\n                    paint.color = android.graphics.Color.rgb(184, 194, 209)\n                    paint.textSize = with(density) { 7.5.sp.toPx() }\n                    paint.textAlign = Paint.Align.LEFT\n                    canvas.nativeCanvas.drawText(String.format(java.util.Locale.US, "%03d°%02d\\\'%02d\\\"", degrees, minutes, seconds), point.x + with(density) { 7.dp.toPx() }, point.y + with(density) { 2.dp.toPx() }, paint)\n                    paint.textAlign = Paint.Align.CENTER\n                    paint.color = android.graphics.Color.rgb(255, 209, 102)\n                    paint.textSize = with(density) { 12.5.sp.toPx() }\n                }'
           )
           s = s.replace(
-              'paint.color = android.graphics.Color.rgb(184, 194, 209)\n                paint.textSize = with(density) { 10.sp.toPx() }\n                for (i in 0 until 12) {',
-              'paint.color = android.graphics.Color.rgb(184, 194, 209)\n                paint.textSize = with(density) { 10.sp.toPx() }\n                for (i in 0 until 12) {'
+              'OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())',
+              'OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), textStyle = androidx.compose.material3.LocalTextStyle.current.copy(color = planetColor))'
           )
-          # Keep the existing outer degree markers from the previous wheel revision.
-          if 'for (i in 0 until 12) {\n                    val degree = i * 30' not in s:
-              s = s.replace(
-                  'paint.color = android.graphics.Color.rgb(184, 194, 209)\n                paint.textSize = with(density) { 10.sp.toPx() }',
-                  'paint.color = android.graphics.Color.rgb(184, 194, 209)\n                paint.textSize = with(density) { 10.sp.toPx() }\n                for (i in 0 until 12) {\n                    val degree = i * 30\n                    val angle = Math.toRadians(180.0 - degree)\n                    val p = Offset(center.x + radius * 1.025f * cos(angle).toFloat(), center.y + radius * 1.025f * sin(angle).toFloat())\n                    canvas.nativeCanvas.drawText("$degree°", p.x, p.y + with(density) { 4.dp.toPx() }, paint)\n                }'
-              )
+          s = s.replace(
+              'OutlinedTextField(city, { city = it }, label = { Text("City / location") }, modifier = Modifier.fillMaxWidth())',
+              'OutlinedTextField(city, { city = it }, label = { Text("City / location") }, modifier = Modifier.fillMaxWidth(), textStyle = androidx.compose.material3.LocalTextStyle.current.copy(color = planetColor))'
           p.write_text(s)
           PY
       - name: Build APK
