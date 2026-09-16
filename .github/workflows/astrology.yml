@@ -29,23 +29,183 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path('app/src/main/java/com/gballanikas/astrochart/MainActivity.kt')
           s = p.read_text()
           if 'import androidx.compose.ui.graphics.nativeCanvas' not in s:
               marker = 'import androidx.compose.ui.graphics.drawscope.drawIntoCanvas\n'
               s = s.replace(marker, marker + 'import androidx.compose.ui.graphics.nativeCanvas\n', 1)
-          replacements = [
-              ('''private val zodiacGlyph = listOf("♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓")''', '''private val zodiacGlyph = listOf("♈︎", "♉︎", "♊︎", "♋︎", "♌︎", "♍︎", "♎︎", "♏︎", "♐︎", "♑︎", "♒︎", "♓︎")'''),
-              ('''paint.color = android.graphics.Color.rgb(221, 230, 242)\n                paint.textSize = with(density) { 58.sp.toPx() }''', '''paint.color = android.graphics.Color.rgb(255, 59, 59)\n                paint.textSize = with(density) { 25.sp.toPx() }'''),
-              ('''canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 14.dp.toPx() }, paint)''', '''canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 6.dp.toPx() }, paint)'''),
-              ('''val aspectRadius = radius * .56f\n            val planetRadius = radius * .66f''', '''val aspectRadius = radius * .64f\n            val planetRadius = radius * .72f'''),
-              ('''paint.color = android.graphics.Color.rgb(255, 209, 102)\n                paint.textSize = with(density) { 25.sp.toPx() }''', '''paint.color = android.graphics.Color.rgb(255, 209, 102)\n                paint.textSize = with(density) { 12.5.sp.toPx() }'''),
-              ('''canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 6.dp.toPx() }, paint)\n                }''', '''canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 3.dp.toPx() }, paint)\n                }'''),
-              ('''OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())''', '''OutlinedTextField(name, { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), textStyle = androidx.compose.material3.LocalTextStyle.current.copy(color = planetColor))'''),
-              ('''OutlinedTextField(city, { city = it }, label = { Text("City / location") }, modifier = Modifier.fillMaxWidth())''', '''OutlinedTextField(city, { city = it }, label = { Text("City / location") }, modifier = Modifier.fillMaxWidth(), textStyle = androidx.compose.material3.LocalTextStyle.current.copy(color = planetColor))''')
-          ]
-          for old, new in replacements:
-              s = s.replace(old, new)
+
+          # Keep the existing source changes, but replace the complete wheel renderer with
+          # the final classic layout: local 0-30 degree scale outside each zodiac sector,
+          # planet degree labels beside the glyphs, a larger inner/aspect circle, and
+          # clearly visible blue Placidus house cusps and house numbers.
+          start = s.find('@Composable\nprivate fun HoroscopeWheel')
+          end = s.find('private fun wheelPoint', start)
+          if start >= 0 and end > start:
+              wheel = r'''@Composable
+private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>, chart: ChartAngles?) {
+    val density = LocalDensity.current
+    Box(Modifier.fillMaxWidth().height(400.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(360.dp)) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val radius = min(size.width, size.height) * .47f
+            val signRadius = radius * .865f
+            val aspectRadius = radius * .70f
+            val planetRadius = radius * .72f
+            val degreeRadius = radius * 1.035f
+            val houseColor = Color(0xFF3FA7FF)
+
+            drawCircle(wheelBackground, radius, center)
+            drawCircle(wheelInk, radius, center, style = Stroke(2.2f))
+            drawCircle(wheelMuted, signRadius, center, style = Stroke(1.2f))
+            drawCircle(wheelMuted, aspectRadius, center, style = Stroke(1f))
+
+            // Zodiac boundaries.
+            for (i in 0 until 12) {
+                drawLine(
+                    wheelMuted,
+                    wheelPoint(center, aspectRadius, i * 30.0),
+                    wheelPoint(center, signRadius, i * 30.0),
+                    strokeWidth = 1f
+                )
+            }
+
+            // Tick marks and a local 0°..30° scale for every zodiac sign.
+            for (sign in 0 until 12) {
+                for (localDeg in 0..30 step 5) {
+                    val longitude = sign * 30.0 + localDeg
+                    val a = Math.toRadians(180.0 - longitude)
+                    val r1 = if (localDeg % 10 == 0) radius * .925f else radius * .945f
+                    val r2 = radius * .985f
+                    drawLine(
+                        wheelMuted,
+                        Offset(center.x + r1 * cos(a).toFloat(), center.y + r1 * sin(a).toFloat()),
+                        Offset(center.x + r2 * cos(a).toFloat(), center.y + r2 * sin(a).toFloat()),
+                        strokeWidth = if (localDeg % 10 == 0) 1.4f else .8f
+                    )
+                    val labelR = degreeRadius
+                    val label = "${localDeg}°"
+                    val x = center.x + labelR * cos(a).toFloat()
+                    val y = center.y + labelR * sin(a).toFloat()
+                    drawIntoCanvas { canvas ->
+                        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = android.graphics.Color.rgb(184, 194, 209)
+                            textSize = with(density) { 8.5.sp.toPx() }
+                            textAlign = Paint.Align.CENTER
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                        }
+                        canvas.nativeCanvas.drawText(label, x, y + with(density) { 3.dp.toPx() }, paint)
+                    }
+                }
+            }
+
+            // Zodiac glyphs centered in their sectors, outside the planet area.
+            zodiacGlyph.forEachIndexed { i, glyph ->
+                val p = wheelPoint(center, radius * .91f, i * 30.0 + 15.0)
+                drawIntoCanvas { canvas ->
+                    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = android.graphics.Color.rgb(255, 59, 59)
+                        textSize = with(density) { 25.sp.toPx() }
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                    }
+                    canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 8.dp.toPx() }, paint)
+                }
+            }
+
+            // Aspect lines.
+            aspects.forEach { a ->
+                val p1 = positions.firstOrNull { it.name == a.first }
+                val p2 = positions.firstOrNull { it.name == a.second }
+                if (p1 != null && p2 != null && p1.name != "Ascendant" && p1.name != "MC" && p2.name != "Ascendant" && p2.name != "MC") {
+                    drawLine(
+                        aspectColor(a.angle),
+                        wheelPoint(center, aspectRadius, p1.longitude),
+                        wheelPoint(center, aspectRadius, p2.longitude),
+                        strokeWidth = if (a.angle == 0) 3f else 2.4f,
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
+
+            // Placidus house cusps: blue and drawn prominently over the chart.
+            chart?.houses?.forEachIndexed { i, lon ->
+                drawLine(
+                    houseColor,
+                    center,
+                    wheelPoint(center, signRadius, lon),
+                    strokeWidth = if (i == 0 || i == 3 || i == 6 || i == 9) 2.4f else 1.5f
+                )
+            }
+
+            // House numbers in the inner ring.
+            chart?.houses?.forEachIndexed { i, lon ->
+                val next = chart.houses[(i + 1) % 12]
+                val span = ((next - lon + 360.0) % 360.0) / 2.0
+                val mid = (lon + span) % 360.0
+                val p = wheelPoint(center, aspectRadius * .88f, mid)
+                drawIntoCanvas { canvas ->
+                    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = android.graphics.Color.rgb(63, 167, 255)
+                        textSize = with(density) { 10.sp.toPx() }
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                    }
+                    canvas.nativeCanvas.drawText((i + 1).toString(), p.x, p.y + with(density) { 3.dp.toPx() }, paint)
+                }
+            }
+
+            // Planet glyphs and degree labels. Degree labels sit beside the glyph,
+            // not on top of it, and use degrees + minutes only (no seconds).
+            positions.forEach { p ->
+                val point = wheelPoint(center, planetRadius, p.longitude)
+                val isAngle = p.name == "Ascendant" || p.name == "MC"
+                val glyphColor = if (isAngle) zodiacColor else planetColor
+                val local = ((p.longitude % 30.0) + 30.0) % 30.0
+                var whole = kotlin.math.floor(local).toInt()
+                var minutes = kotlin.math.round((local - whole) * 60.0).toInt()
+                if (minutes >= 60) { whole += 1; minutes = 0 }
+                if (whole >= 30) whole = 0
+                val degreeText = String.format(Locale.US, "%d°%02d′", whole, minutes)
+                val a = Math.toRadians(180.0 - p.longitude)
+                val radialX = cos(a).toFloat()
+                val radialY = sin(a).toFloat()
+                val side = Offset(point.x + radialX * with(density) { 12.dp.toPx() }, point.y + radialY * with(density) { 12.dp.toPx() })
+                drawIntoCanvas { canvas ->
+                    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = if (isAngle) android.graphics.Color.rgb(255, 59, 59) else android.graphics.Color.rgb(255, 209, 102)
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+                    }
+                    paint.textSize = with(density) { if (isAngle) 10.sp.toPx() else 12.5.sp.toPx() }
+                    canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 4.dp.toPx() }, paint)
+                    paint.textSize = with(density) { 8.5.sp.toPx() }
+                    canvas.nativeCanvas.drawText(degreeText, side.x, side.y + with(density) { 3.dp.toPx() }, paint)
+                }
+            }
+
+            // Clear ASC / MC markers on the wheel rim.
+            chart?.let {
+                val asc = wheelPoint(center, radius * .94f, it.ascendant)
+                val mc = wheelPoint(center, radius * .94f, it.mc)
+                drawIntoCanvas { canvas ->
+                    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = android.graphics.Color.rgb(63, 167, 255)
+                        textSize = with(density) { 10.sp.toPx() }
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.DEFAULT_BOLD
+                    }
+                    canvas.nativeCanvas.drawText("ASC", asc.x, asc.y, paint)
+                    canvas.nativeCanvas.drawText("MC", mc.x, mc.y, paint)
+                }
+            }
+        }
+    }
+}
+
+'''
+              s = s[:start] + wheel + s[end:]
           p.write_text(s)
           PY
       - name: Build APK
