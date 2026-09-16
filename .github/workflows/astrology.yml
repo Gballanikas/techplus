@@ -20,6 +20,27 @@ jobs:
         run: |
           mkdir -p app/src/main/java/io/github/cosinekitty/astronomy
           curl --fail --location --retry 3 "https://raw.githubusercontent.com/cosinekitty/astronomy/v2.1.19/source/kotlin/src/main/kotlin/io/github/cosinekitty/astronomy/astronomy.kt" --output app/src/main/java/io/github/cosinekitty/astronomy/astronomy.kt
+      - name: Apply simple zodiac glyph rendering
+        working-directory: AstroChart
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/gballanikas/astrochart/MainActivity.kt')
+          s = p.read_text()
+          s = s.replace(
+              'private val zodiacGlyph = listOf("♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓")',
+              'private val zodiacGlyph = listOf("♈︎", "♉︎", "♊︎", "♋︎", "♌︎", "♍︎", "♎︎", "♏︎", "♐︎", "♑︎", "♒︎", "♓︎")'
+          )
+          s = s.replace(
+              'paint.color = android.graphics.Color.rgb(221, 230, 242)\n                paint.textSize = with(density) { 58.sp.toPx() }',
+              'paint.color = android.graphics.Color.rgb(255, 209, 102)\n                paint.textSize = with(density) { 25.sp.toPx() }'
+          )
+          s = s.replace(
+              'canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 14.dp.toPx() }, paint)',
+              'canvas.nativeCanvas.drawText(glyph, p.x, p.y + with(density) { 6.dp.toPx() }, paint)'
+          )
+          p.write_text(s)
+          PY
       - name: Build APK
         working-directory: AstroChart
         run: gradle assembleDebug
