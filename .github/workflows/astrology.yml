@@ -24,7 +24,7 @@ jobs:
         run: |
           mkdir -p app/src/main/java/io/github/cosinekitty/astronomy
           curl --fail --location --retry 3 "https://raw.githubusercontent.com/cosinekitty/astronomy/v2.1.19/source/kotlin/src/main/kotlin/io/github/cosinekitty/astronomy/astronomy.kt" --output app/src/main/java/io/github/cosinekitty/astronomy/astronomy.kt
-      - name: Verify AstroChart source
+      - name: Verify and correct AstroChart source
         working-directory: AstroChart
         run: |
           python3 - <<'PY'
@@ -34,6 +34,16 @@ jobs:
           marker = 'import androidx.compose.ui.graphics.drawscope.drawIntoCanvas\n'
           if 'import androidx.compose.ui.graphics.nativeCanvas' not in s:
               s = s.replace(marker, marker + 'import androidx.compose.ui.graphics.nativeCanvas\n', 1)
+          s = s.replace(
+              'val asc = normalize(Math.toDegrees(atan2(-cos(ramc), sin(ramc) * cos(eps) + tanPhi * sin(eps))))',
+              'val asc = normalize(Math.toDegrees(atan2(-cos(ramc), sin(ramc) * cos(eps) + tanPhi * sin(eps)) + Math.PI))'
+          )
+          s = s.replace('placidusIntermediate(ramcDeg, tanPhi, tanEps, initialOffset = 30.0, divisor = 3.0, upper = true)', 'placidusIntermediate(ramcDeg, tanPhi, tanEps, eps, initialOffset = 30.0, divisor = 3.0, upper = true)')
+          s = s.replace('placidusIntermediate(ramcDeg, tanPhi, tanEps, initialOffset = 60.0, divisor = 1.5, upper = true)', 'placidusIntermediate(ramcDeg, tanPhi, tanEps, eps, initialOffset = 60.0, divisor = 1.5, upper = true)')
+          s = s.replace('placidusIntermediate(ramcDeg, tanPhi, tanEps, initialOffset = 120.0, divisor = 1.5, upper = false)', 'placidusIntermediate(ramcDeg, tanPhi, tanEps, eps, initialOffset = 120.0, divisor = 1.5, upper = false)')
+          s = s.replace('placidusIntermediate(ramcDeg, tanPhi, tanEps, initialOffset = 150.0, divisor = 3.0, upper = false)', 'placidusIntermediate(ramcDeg, tanPhi, tanEps, eps, initialOffset = 150.0, divisor = 3.0, upper = false)')
+          s = s.replace('private fun placidusIntermediate(ramcDeg: Double, tanPhi: Double, tanEps: Double, initialOffset:', 'private fun placidusIntermediate(ramcDeg: Double, tanPhi: Double, tanEps: Double, eps: Double, initialOffset:')
+          s = s.replace('return normalize(Math.toDegrees(atan2(sin(ra), cos(ra) * cos(Math.toRadians(23.4392911)))))', 'return normalize(Math.toDegrees(atan2(sin(ra), cos(ra) * cos(eps))))')
           p.write_text(s)
           PY
       - name: Build APK
