@@ -10,6 +10,7 @@ import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -146,14 +148,21 @@ private fun AstroChartApp() {
 
 @Composable
 private fun RealTimeScreen() {
-    val positions = remember { calculatePositions(Instant.now()) }
+    var refreshKey by remember { mutableIntStateOf(0) }
+    val positions = remember(refreshKey) { calculatePositions(Instant.now()) }
     val aspects = remember(positions) { calculateAspects(positions) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
-        Text("Current sky", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Current sky", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
+            Button(onClick = { refreshKey++ }) { Text("Refresh sky") }
+        }
+        Text("Planetary positions calculated for ${java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy • HH:mm:ss z", Locale.getDefault()))}", color = Color(0xFF9BA7B8), fontSize = 10.sp)
         Spacer(Modifier.height(6.dp))
         HoroscopeWheel(positions, aspects, null)
         Spacer(Modifier.height(10.dp))
         AspectMatrix(positions, aspects)
+        Spacer(Modifier.height(12.dp))
+        AstrologicalBalanceCard(aspects)
         Spacer(Modifier.height(12.dp))
         PositionList(positions)
     }
@@ -227,6 +236,104 @@ private fun BirthScreen() {
             PositionList(positions)
             Text("${date} ${time} ${loc.timezone} • %.5f, %.5f".format(Locale.US, loc.latitude, loc.longitude), fontSize = 11.sp, color = Color(0xFF9BA7B8), modifier = Modifier.padding(vertical = 8.dp))
             Text("Placidus houses • house cusps are calculated from the birth date/time, geographic location and local sidereal time.", fontSize = 11.sp, color = Color(0xFF9BA7B8))
+        }
+    }
+}
+
+private data class BalanceResult(
+    val score: Int,
+    val positiveShare: Int,
+    val negativeShare: Int,
+    val neutralShare: Int,
+    val positiveDetails: List<String>,
+    val negativeDetails: List<String>,
+    val interpretation: String
+)
+
+private fun calculateAstrologicalBalance(aspects: List<Aspect>): BalanceResult {
+    var positive = 0.0
+    var negative = 0.0
+    var neutral = 0.0
+    val positiveDetails = mutableListOf<String>()
+    val negativeDetails = mutableListOf<String>()
+    aspects.forEach { a ->
+        val maxOrb = aspectRules.firstOrNull { it.angle == a.angle }?.orb ?: 8.0
+        val strength = (1.0 - a.orb / maxOrb).coerceIn(0.0, 1.0)
+        val benefic = listOf("Venus", "Jupiter").any { it == a.first || it == a.second }
+        val challenging = listOf("Mars", "Saturn", "Pluto").any { it == a.first || it == a.second }
+        val label = "${a.first}–${a.second} ${a.angle}°"
+        val signed = when (a.angle) {
+            120 -> 3.0
+            60 -> 2.0
+            90 -> -3.0
+            180 -> -2.0
+            0 -> when {
+                benefic && !challenging -> 2.5
+                challenging && !benefic -> -2.5
+                else -> 0.35
+            }
+            else -> 0.0
+        } * strength
+        when {
+            signed > 0.05 -> { positive += signed; positiveDetails += label }
+            signed < -0.05 -> { negative += -signed; negativeDetails += label }
+            else -> neutral += strength
+        }
+    }
+    val total = positive + negative + neutral
+    val p = if (total == 0.0) 0 else (positive / total * 100).toInt()
+    val n = if (total == 0.0) 0 else (negative / total * 100).toInt()
+    val z = (100 - p - n).coerceAtLeast(0)
+    val score = if (positive + negative == 0.0) 0 else (((positive - negative) / (positive + negative)) * 100).toInt().coerceIn(-100, 100)
+    val interpretation = when {
+        score >= 40 -> "The current aspect pattern is weighted toward supportive influences. In traditional astrology this is read as a comparatively cooperative climate, although individual outcomes are never guaranteed."
+        score >= 15 -> "Supportive aspects modestly outweigh challenging ones. Traditional astrologers would describe the overall pattern as more constructive than pressured."
+        score <= -40 -> "The current aspect pattern is weighted toward challenging influences. Traditional astrology reads this as a period calling for patience, adjustment and careful handling of tensions."
+        score <= -15 -> "Challenging aspects modestly outweigh supportive ones. Traditional astrologers might emphasize friction, discipline and the need to manage competing demands."
+        else -> "Supportive and challenging aspects are relatively balanced. Traditional astrologers would interpret this as a mixed sky, with opportunities and pressures operating together."
+    }
+    return BalanceResult(score, p, n, z, positiveDetails.take(4), negativeDetails.take(4), interpretation)
+}
+
+@Composable
+private fun AstrologicalBalanceCard(aspects: List<Aspect>) {
+    val result = remember(aspects) { calculateAstrologicalBalance(aspects) }
+    val scoreColor = if (result.score > 10) Color(0xFF45D483) else if (result.score < -10) Color(0xFFFF6262) else Color(0xFFFFC857)
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = wheelBackground, contentColor = Color.White)) {
+        Column(Modifier.padding(12.dp)) {
+            Text("General astrological interpretation", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("Current planetary map • traditional aspect reading", color = Color(0xFF9BA7B8), fontSize = 10.sp)
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    Text("Overall balance", color = Color(0xFFB8C2D1), fontSize = 11.sp)
+                    Text("${if (result.score > 0) "+" else ""}${result.score} / 100", color = scoreColor, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                }
+                Text("Positive vs. challenging", color = Color(0xFFB8C2D1), fontSize = 10.sp)
+            }
+            Spacer(Modifier.height(7.dp))
+            Row(Modifier.fillMaxWidth().height(12.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (result.positiveShare > 0) Box(Modifier.weight(result.positiveShare.toFloat()).fillMaxSize().background(Color(0xFF299B69)))
+                if (result.neutralShare > 0) Box(Modifier.weight(result.neutralShare.toFloat()).fillMaxSize().background(Color(0xFF788393)))
+                if (result.negativeShare > 0) Box(Modifier.weight(result.negativeShare.toFloat()).fillMaxSize().background(Color(0xFFC84B4B)))
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Supportive ${result.positiveShare}%", color = Color(0xFF45D483), fontSize = 10.sp)
+                Text("Neutral ${result.neutralShare}%", color = Color(0xFFB8C2D1), fontSize = 10.sp)
+                Text("Challenging ${result.negativeShare}%", color = Color(0xFFFF7777), fontSize = 10.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(result.interpretation, fontSize = 12.sp, color = Color(0xFFE1E7EF))
+            if (result.positiveDetails.isNotEmpty()) {
+                Spacer(Modifier.height(7.dp))
+                Text("Supportive aspects: ${result.positiveDetails.joinToString(", ")}", color = Color(0xFF45D483), fontSize = 10.sp)
+            }
+            if (result.negativeDetails.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text("Challenging aspects: ${result.negativeDetails.joinToString(", ")}", color = Color(0xFFFF7777), fontSize = 10.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("Astrological interpretation only; this score is a transparent heuristic, not a scientific forecast or probability.", color = Color(0xFF9BA7B8), fontSize = 9.sp)
         }
     }
 }
@@ -330,8 +437,27 @@ private fun AspectLegendItem(glyph: String, label: String, color: Color) {
 @Composable
 private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>, chart: ChartAngles?) {
     val density = LocalDensity.current
+    var selectedPlanet by remember(positions) { mutableStateOf<String?>(null) }
     Box(Modifier.fillMaxWidth().height(410.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(370.dp)) {
+        Canvas(Modifier.size(370.dp).pointerInput(positions) {
+            detectTapGestures { tap ->
+                val c = Offset(size.width / 2f, size.height / 2f)
+                val r = min(size.width, size.height) * .47f * .70f
+                val nearest = positions.minByOrNull { p ->
+                    val a = Math.toRadians(180.0 - p.longitude)
+                    val x = c.x + r * cos(a).toFloat()
+                    val y = c.y + r * sin(a).toFloat()
+                    hypot((tap.x - x).toDouble(), (tap.y - y).toDouble())
+                }
+                val a = nearest?.let { Math.toRadians(180.0 - it.longitude) }
+                val distance = if (nearest == null || a == null) Double.MAX_VALUE else {
+                    val x = c.x + r * cos(a).toFloat()
+                    val y = c.y + r * sin(a).toFloat()
+                    hypot((tap.x - x).toDouble(), (tap.y - y).toDouble())
+                }
+                selectedPlanet = if (distance <= with(density) { 30.dp.toPx() }) nearest?.name else null
+            }
+        }) {
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = min(size.width, size.height) * .47f
             val signRadius = radius * .87f
@@ -363,14 +489,17 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
 
             // Natal house cusps are independent of zodiac sign boundaries.
             chart?.houses?.forEachIndexed { i, lon ->
-                drawLine(wheelInk, center, wheelPoint(center, signRadius, lon), strokeWidth = if (i == 0 || i == 3 || i == 6 || i == 9) 2.4f else 1.5f)
+                // Blue radial cusp boundaries distinguish Placidus houses from zodiac sign divisions.
+                val angularCusp = i == 0 || i == 3 || i == 6 || i == 9
+                drawLine(Color(0xFF398BFF), center, wheelPoint(center, signRadius, lon), strokeWidth = if (angularCusp) 2.8f else 1.8f)
             }
 
             aspects.forEach { a ->
                 val p1 = positions.firstOrNull { it.name == a.first }
                 val p2 = positions.firstOrNull { it.name == a.second }
                 if (p1 != null && p2 != null && p1.name != "Ascendant" && p1.name != "MC" && p2.name != "Ascendant" && p2.name != "MC") {
-                    drawLine(aspectColor(a.angle), wheelPoint(center, aspectRadius, p1.longitude), wheelPoint(center, aspectRadius, p2.longitude), strokeWidth = if (a.angle == 0) 3f else 2.4f, cap = StrokeCap.Round)
+                    val isSelectedAspect = selectedPlanet == a.first || selectedPlanet == a.second
+                    drawLine(aspectColor(a.angle).copy(alpha = if (selectedPlanet == null || isSelectedAspect) 1f else .22f), wheelPoint(center, aspectRadius, p1.longitude), wheelPoint(center, aspectRadius, p2.longitude), strokeWidth = if (isSelectedAspect) 4.2f else if (a.angle == 0) 3f else 2.4f, cap = StrokeCap.Round)
                 }
             }
 
@@ -399,8 +528,8 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
                 // Planet degree is intentionally WITHOUT seconds and is placed to the RIGHT of the planet glyph.
                 positions.forEach { p ->
                     val point = wheelPoint(center, planetRadius, p.longitude)
-                    paint.color = if (p.name == "Ascendant" || p.name == "MC") android.graphics.Color.rgb(255, 59, 59) else android.graphics.Color.rgb(255, 209, 102)
-                    paint.textSize = if (p.name == "Ascendant" || p.name == "MC") with(density) { 9.5.sp.toPx() } else with(density) { 12.5.sp.toPx() }
+                    paint.color = if (p.name == selectedPlanet) android.graphics.Color.WHITE else if (p.name == "Ascendant" || p.name == "MC") android.graphics.Color.rgb(255, 59, 59) else android.graphics.Color.rgb(255, 209, 102)
+                    paint.textSize = if (p.name == "Ascendant" || p.name == "MC") with(density) { 9.5.sp.toPx() } else with(density) { if (p.name == selectedPlanet) 16.sp.toPx() else 12.5.sp.toPx() }
                     canvas.nativeCanvas.drawText(p.glyph, point.x, point.y + with(density) { 3.dp.toPx() }, paint)
                     paint.color = android.graphics.Color.rgb(184, 194, 209)
                     paint.textSize = with(density) { 7.sp.toPx() }
@@ -428,8 +557,21 @@ private fun HoroscopeWheel(positions: List<PointPosition>, aspects: List<Aspect>
             }
         }
     }
+    selectedPlanet?.let { selected ->
+        val point = positions.firstOrNull { it.name == selected }
+        if (point != null) {
+            val connected = aspects.filter { it.first == selected || it.second == selected }
+            Card(Modifier.fillMaxWidth().padding(top = 4.dp), colors = CardDefaults.cardColors(containerColor = wheelBackground, contentColor = Color.White)) {
+                Column(Modifier.padding(10.dp)) {
+                    Text("${point.glyph}  ${point.name}  •  ${formatPosition(point.longitude)}", fontWeight = FontWeight.Bold)
+                    Text(if (connected.isEmpty()) "No major aspects within the selected orbs." else connected.joinToString("   ") { a -> "${a.glyph} ${if (a.first == selected) a.second else a.first} (${String.format(Locale.US, "%.1f", a.orb)}° orb)" }, fontSize = 11.sp, color = Color(0xFFB8C2D1))
+                    Text("Tap a planet to highlight its aspects. Tap an empty area to clear selection.", fontSize = 10.sp, color = Color(0xFF9BA7B8))
+                }
+            }
+        }
+    }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-        Text(if (chart == null) "Planet degrees • local zodiac degree scale • aspect colors" else "Placidus house cusps • house numbers • ASC / MC • local zodiac degrees", color = Color(0xFF9BA7B8), fontSize = 11.sp)
+        Text(if (chart == null) "Tap planets to inspect aspects • zodiac signs only • local degree scale" else "Tap planets • blue Placidus cusps • house numbers • ASC / MC", color = Color(0xFF9BA7B8), fontSize = 11.sp)
     }
 }
 
